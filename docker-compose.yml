@@ -1,0 +1,9 @@
+services:
+  spark:
+    image: spark:scala
+
+  elastic-search:
+    image: elasticsearch:9.2.0
+
+  kibana:
+    image: kibana:9.2.0
