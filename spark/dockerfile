@@ -1,0 +1,4 @@
+FROM spark:scala
+WORKDIR /app
+COPY . .
+ENTRYPOINT ["./entrypoint.sh"]
