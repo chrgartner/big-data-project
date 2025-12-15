@@ -1,96 +1,87 @@
 import boto3
-from datetime import date, datetime
-import pandas as pd
-from gdeltdoc import GdeltDoc, Filters
-from dateutil.relativedelta import relativedelta
+from datetime import datetime
 from botocore.exceptions import NoCredentialsError
 import requests
 import gzip
 import os
+import io
+from dataclasses import dataclass
 
 BUCKET_NAME = "bigdata-mapping-ai-project"
 REGION = "eu-central-1"
 BASE_PATH = "./data-sourcing/data/"
 
-SOURCE_URL = "http://data.gdeltproject.org/gdeltv2_cloudvision/lastupdate.txt"
-
-gd = GdeltDoc()
 s3 = boto3.client("s3", region_name=REGION)
 
-# ==========================================================
+@dataclass
+class URLStruct:
+   url: str
+   filename: str
 
-def fetch_lastupdate():
-  print(f"Fetching lastupdate information...")
-
-  response = requests.get(SOURCE_URL)
-  
-  if response.status_code != 200:
-    print(f"Error: {response.status_code}")
-    return None
-  
-  print("Success")
-  return fetch_csv(response)
+headers = {
+  "User-Agent": "DataFetcher/1.0 (+https://example.com)"
+}
 
 # ==========================================================
 
-def fetch_csv(response):
-  print(f"Fetching gdelt data...")
+from datetime import datetime, timedelta
 
-  data = requests.get(response.text.split()[2])
+def get_source_urls(year):
+    urls = []
 
-  if data.status_code != 200:
-    print(f"Error: {response.status_code}")
-    return None
-    
-  print(f"Success")
-  
-  return write_to_file(data.content)
+    current = datetime(year, 1, 1, 0, 1, 0)
+    end = datetime(year + 1, 1, 1, 0, 1, 0)
+
+    while current < end:
+        timestamp = current.strftime("%Y%m%d%H%M%S")
+        urls.append(URLStruct(
+           url = f"http://data.gdeltproject.org/gdeltv3/gal/{timestamp}.gal.json.gz",
+           filename = f"gdelt-articles/{timestamp}.json"
+        ))
+        current += timedelta(days=1)
+
+    return urls
 
 # ==========================================================
 
-def write_to_file(data):
-  filename = BASE_PATH + f"gdelt_{datetime.now().date()}.csv"
+def fetch_and_upload_data(urls):
+  print(f"Fetching data...")
 
-  print(f"Writing data to {filename}...")
+  for url in urls:
+    response = requests.get(url.url, headers=headers)
 
-  with open(filename + ".gz", "wb") as file:
-    file.write(data)
+    if response.status_code != 200:
+      print(f"Error {response.status_code}: Url {url} found nothing")
+      continue
 
-  with gzip.open(filename + ".gz", 'rb') as file:
-    csv = file.read()
+    gz_buffer = io.BytesIO(response.content)
+    with gzip.GzipFile(fileobj=gz_buffer) as gz:
+      csv_bytes = gz.read()
 
-  with open(filename, "wb") as file:
-    file.write(csv)
-
-  os.remove(filename + ".gz")
-
-  print(f"Done")
-
-  return filename
+      upload_to_S3(csv_bytes, url.filename)
   
 # ==========================================================
 
-def upload_to_S3(filename):
-  print(f"Uploading {filename} to {BUCKET_NAME}")
+def upload_to_S3(data, filename):
+  print(f"Uploading to {filename}")
+
+  fileobj = io.BytesIO(data)
 
   try:
-    s3.upload_file(filename, BUCKET_NAME, f"gdelt/{filename}")
+    s3.upload_fileobj(fileobj, BUCKET_NAME, filename)
   except FileNotFoundError:
     print(f"Could not find local file {filename}.")
     return
   except NoCredentialsError:
-    print("No AWS credentials found. Run 'aws configure'.")
+    print(f"No AWS credentials found. Run 'aws configure'. {filename}")
     return
   except Exception as e:
-    print(f"Error: {e}")
+    print(f"Error: {e}; {filename}")
     return
-  
-  print("Success")
 
 # ==========================================================
 
-filename = fetch_lastupdate()
-
-print(filename)
-
-upload_to_S3(filename)
+fetch_and_upload_data(get_source_urls(2024))
+urls = get_source_urls(2024)
+print(urls[0].url)
+print(urls[0].timestamp)
