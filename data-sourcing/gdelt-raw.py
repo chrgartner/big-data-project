@@ -1,10 +1,9 @@
 import boto3
-from datetime import datetime
-from botocore.exceptions import NoCredentialsError
 import requests
 import gzip
-import os
 import io
+from datetime import datetime
+from botocore.exceptions import NoCredentialsError
 from dataclasses import dataclass
 
 BUCKET_NAME = "bigdata-mapping-ai-project"
@@ -18,10 +17,6 @@ class URLStruct:
    url: str
    filename: str
 
-headers = {
-  "User-Agent": "DataFetcher/1.0 (+https://example.com)"
-}
-
 # ==========================================================
 
 from datetime import datetime, timedelta
@@ -29,8 +24,8 @@ from datetime import datetime, timedelta
 def get_source_urls(year):
     urls = []
 
-    current = datetime(year, 1, 1, 0, 1, 0)
-    end = datetime(year + 1, 1, 1, 0, 1, 0)
+    current = datetime(year, 1, 1, 16, 1, 0)
+    end = datetime(year + 1, 1, 1, 16, 1, 0)
 
     while current < end:
         timestamp = current.strftime("%Y%m%d%H%M%S")
@@ -48,7 +43,7 @@ def fetch_and_upload_data(urls):
   print(f"Fetching data...")
 
   for url in urls:
-    response = requests.get(url.url, headers=headers)
+    response = requests.get(url.url)
 
     if response.status_code != 200:
       print(f"Error {response.status_code}: Url {url} found nothing")
@@ -62,13 +57,12 @@ def fetch_and_upload_data(urls):
   
 # ==========================================================
 
-def upload_to_S3(data, filename):
-  print(f"Uploading to {filename}")
-
+def upload_to_S3(data, filename):      
   fileobj = io.BytesIO(data)
 
   try:
     s3.upload_fileobj(fileobj, BUCKET_NAME, filename)
+    print(f"Success {filename}")
   except FileNotFoundError:
     print(f"Could not find local file {filename}.")
     return
@@ -82,6 +76,3 @@ def upload_to_S3(data, filename):
 # ==========================================================
 
 fetch_and_upload_data(get_source_urls(2024))
-urls = get_source_urls(2024)
-print(urls[0].url)
-print(urls[0].timestamp)

@@ -17,6 +17,8 @@ CC_INDEX_URL = "https://index.commoncrawl.org/collinfo.json"
 
 s3 = boto3.client("s3", region_name=REGION)
 
+print("something")
+
 # ==========================================================
 
 def fetch_latest_crawl():
